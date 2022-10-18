@@ -13,7 +13,7 @@ const inputStyle =
 let tableKey = 0;
 
 const Home: NextPage = () => {
-  const { data: beefs, refetch: refetchBeefs } = trpc.beef.readAll.useQuery();
+  const { data: beefs, refetch: refetchBeefs } = trpc.beef.readAll.useQuery(undefined, { refetchOnWindowFocus: false });
   const { mutateAsync: createBeef, isLoading: createIsLoading } = trpc.beef.create.useMutation();
   const { mutateAsync: updateBeefs, isLoading: updateIsLoading } = trpc.beef.updateMultiple.useMutation();
   const { mutateAsync: deleteBeef, isLoading: deleteIsLoading } = trpc.beef.delete.useMutation();
