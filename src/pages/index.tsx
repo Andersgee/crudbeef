@@ -13,10 +13,16 @@ const inputStyle =
 let tableKey = 0;
 
 const Home: NextPage = () => {
-  const { data: beefs, refetch: refetchBeefs } = trpc.beef.readAll.useQuery(undefined, { refetchOnWindowFocus: false });
+  const {
+    data: beefs,
+    refetch: refetchBeefs,
+    isLoading: dataIsLoading,
+  } = trpc.beef.readAll.useQuery(undefined, { refetchOnWindowFocus: false });
   const { mutateAsync: createBeef, isLoading: createIsLoading } = trpc.beef.create.useMutation();
   const { mutateAsync: updateBeefs, isLoading: updateIsLoading } = trpc.beef.updateMultiple.useMutation();
   const { mutateAsync: deleteBeef, isLoading: deleteIsLoading } = trpc.beef.delete.useMutation();
+
+  const isLoading = dataIsLoading || createIsLoading || updateIsLoading || deleteIsLoading;
 
   const [myFloat, setMyFloat] = useState(0);
   const [myInt, setMyInt] = useState(0);
@@ -27,16 +33,16 @@ const Home: NextPage = () => {
 
   const handleCreate = async () => {
     await createBeef({ myFloat, myInt, myString, myOptionalString });
-    refetchBeefs();
+    await refetchBeefs();
     setEditedBeefs([]);
-    tableKey += 1;
+    //tableKey += 1;
   };
 
   const handleDelete = async (id: string) => {
     await deleteBeef({ id });
-    refetchBeefs();
+    await refetchBeefs();
     setEditedBeefs((prev) => prev.filter((b) => b.id !== id));
-    tableKey += 1;
+    //tableKey += 1;
   };
 
   const handleSaveChanges = async () => {
@@ -81,7 +87,7 @@ const Home: NextPage = () => {
         <div>
           <h1 className="my-8 text-center text-4xl">crudbeef example</h1>
           <button
-            disabled={editedBeefs.length === 0 || updateIsLoading}
+            disabled={isLoading || editedBeefs.length === 0}
             onClick={handleSaveChanges}
             className={`px-2 py-1 ${editedBeefs.length > 0 ? "bg-green-600" : ""} disabled:bg-neutral-400`}
           >
@@ -89,7 +95,7 @@ const Home: NextPage = () => {
           </button>
 
           <button
-            disabled={editedBeefs.length === 0}
+            disabled={isLoading || editedBeefs.length === 0}
             onClick={handleDiscardChanges}
             className={`px-2 py-1 ${editedBeefs.length > 0 ? "bg-blue-600" : ""} disabled:bg-neutral-400`}
           >
@@ -151,7 +157,7 @@ const Home: NextPage = () => {
                 </td>
                 <td>
                   <button
-                    disabled={createIsLoading}
+                    disabled={isLoading}
                     onClick={handleCreate}
                     className="bg-blue-600 px-2 py-1 font-semibold text-white disabled:bg-gray-500"
                   >
@@ -225,7 +231,7 @@ const Home: NextPage = () => {
                     </td>
                     <td>
                       <button
-                        disabled={deleteIsLoading}
+                        disabled={isLoading}
                         className="bg-red-600 px-2 py-1 font-semibold text-white disabled:bg-gray-500"
                         onClick={() => handleDelete(beef.id)}
                       >
