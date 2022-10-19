@@ -14,6 +14,7 @@ let tableKey = 0;
 
 const Home: NextPage = () => {
   const [myStringContains, setMyStringContains] = useState("");
+  const [createdAtOrderBy, setCreatedAtOrderBy] = useState<"desc" | "asc">("desc");
 
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [take, setTake] = useState(3);
@@ -24,7 +25,7 @@ const Home: NextPage = () => {
     refetch: refetchBeefs,
     isLoading: dataIsLoading,
   } = trpc.beef.paginatedFindMany.useQuery(
-    { myStringContains, cursor, createdAtOrderBy: "desc", take },
+    { myStringContains, cursor, createdAtOrderBy, take },
     { refetchOnWindowFocus: false },
   );
 
@@ -57,6 +58,12 @@ const Home: NextPage = () => {
     return undefined;
   }, [beefs]);
 
+  const handleItemsPerPage = (number: number) => {
+    setCursor(undefined);
+    setPageIndex(0);
+    setTake(number);
+  };
+
   const handleContains = (str: string) => {
     setCursor(undefined);
     setPageIndex(0);
@@ -65,13 +72,13 @@ const Home: NextPage = () => {
 
   const onNextPage = () => {
     setCursor(lastItemCursor);
-    setTake(3);
+    setTake((prev) => Math.abs(prev)); //positive
     setPageIndex((prev) => prev + 1);
   };
 
   const onPrevPage = () => {
     setCursor(firstItemCursor);
-    setTake(-3);
+    setTake((prev) => -Math.abs(prev)); //negative
     setPageIndex((prev) => prev - 1);
   };
 
@@ -130,6 +137,30 @@ const Home: NextPage = () => {
       <div className="flex justify-center">
         <div>
           <h1 className="my-8 text-center text-4xl">crudbeef example</h1>
+
+          <div>
+            <label htmlFor="createdAtOrderBy">order by oldest first</label>
+            <input
+              id="createdAtOrderBy"
+              type="checkbox"
+              defaultValue="checked"
+              onChange={() => setCreatedAtOrderBy((prev) => (prev === "asc" ? "desc" : "asc"))}
+              className={inputStyle}
+            />
+          </div>
+          <div>
+            <label htmlFor="take">items per page</label>
+            <input
+              id="take"
+              type="number"
+              value={take}
+              onChange={(e) => {
+                const number = parseFloat(e.target.value);
+                if (isFinite(number)) handleItemsPerPage(number);
+              }}
+              className={inputStyle}
+            />
+          </div>
 
           <div>
             <label htmlFor="myStringContains">myString contains</label>
