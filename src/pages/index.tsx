@@ -1,6 +1,6 @@
 import type { NextPage } from "next";
 import Head from "next/head";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { dateformat } from "../utils/date";
 import { AppRouterTypes, trpc } from "../utils/trpc";
 
@@ -13,11 +13,21 @@ const inputStyle =
 let tableKey = 0;
 
 const Home: NextPage = () => {
+  const [myStringContains, setMyStringContains] = useState("");
+
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [take, setTake] = useState(3);
+  const [pageIndex, setPageIndex] = useState(0);
+
   const {
     data: beefs,
     refetch: refetchBeefs,
     isLoading: dataIsLoading,
-  } = trpc.beef.readAll.useQuery(undefined, { refetchOnWindowFocus: false });
+  } = trpc.beef.paginatedFindMany.useQuery(
+    { myStringContains, cursor, createdAtOrderBy: "desc", take },
+    { refetchOnWindowFocus: false },
+  );
+
   const { mutateAsync: createBeef, isLoading: createIsLoading } = trpc.beef.create.useMutation();
   const { mutateAsync: updateBeefs, isLoading: updateIsLoading } = trpc.beef.updateMultiple.useMutation();
   const { mutateAsync: deleteBeef, isLoading: deleteIsLoading } = trpc.beef.delete.useMutation();
@@ -30,6 +40,40 @@ const Home: NextPage = () => {
   const [myOptionalString, setMyOptionalString] = useState("");
 
   const [editedBeefs, setEditedBeefs] = useState<Beef[]>([]);
+
+  const firstItemCursor = useMemo(() => {
+    if (beefs) {
+      const firstId = beefs?.at(0)?.id;
+      return firstId || undefined;
+    }
+    return undefined;
+  }, [beefs]);
+
+  const lastItemCursor = useMemo(() => {
+    if (beefs) {
+      const lastId = beefs?.at(-1)?.id;
+      return lastId || undefined;
+    }
+    return undefined;
+  }, [beefs]);
+
+  const handleContains = (str: string) => {
+    setCursor(undefined);
+    setPageIndex(0);
+    setMyStringContains(str);
+  };
+
+  const onNextPage = () => {
+    setCursor(lastItemCursor);
+    setTake(3);
+    setPageIndex((prev) => prev + 1);
+  };
+
+  const onPrevPage = () => {
+    setCursor(firstItemCursor);
+    setTake(-3);
+    setPageIndex((prev) => prev - 1);
+  };
 
   const handleCreate = async () => {
     await createBeef({ myFloat, myInt, myString, myOptionalString });
@@ -86,6 +130,18 @@ const Home: NextPage = () => {
       <div className="flex justify-center">
         <div>
           <h1 className="my-8 text-center text-4xl">crudbeef example</h1>
+
+          <div>
+            <label htmlFor="myStringContains">myString contains</label>
+            <input
+              id="myStringContains"
+              type="text"
+              value={myStringContains}
+              onChange={(e) => handleContains(e.target.value)}
+              className={inputStyle}
+            />
+          </div>
+
           <button
             disabled={isLoading || editedBeefs.length === 0}
             onClick={handleSaveChanges}
@@ -252,6 +308,49 @@ const Home: NextPage = () => {
               })}
             </tbody>
           </table>
+          <div className="flex items-center gap-4">
+            <button
+              disabled={pageIndex < 1}
+              onClick={onPrevPage}
+              className="flex bg-blue-600 px-2 py-1 disabled:bg-neutral-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="h-6 w-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953l7.108-4.062A1.125 1.125 0 0121 8.688v8.123zM11.25 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953L9.567 7.71a1.125 1.125 0 011.683.977v8.123z"
+                />
+              </svg>
+            </button>
+            <div>page {pageIndex + 1}</div>
+            <button
+              disabled={!beefs || beefs.length < take}
+              onClick={onNextPage}
+              className="flex bg-blue-600 px-2 py-1 disabled:bg-neutral-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="h-6 w-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062A1.125 1.125 0 013 16.81V8.688zM12.75 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062a1.125 1.125 0 01-1.683-.977V8.688z"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </>

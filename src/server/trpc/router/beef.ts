@@ -79,4 +79,30 @@ export const beefRouter = router({
   readAll: publicProcedure.query(({ ctx }) => {
     return ctx.prisma.beef.findMany({ orderBy: { createdAt: "desc" } });
   }),
+  paginatedFindMany: publicProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(), //the last id of previous result
+        take: z.number().default(10),
+        myStringContains: z.string().optional(),
+        myOptionalStringContains: z.string().nullish(),
+        createdAtOrderBy: z.union([z.literal("desc"), z.literal("asc")]).optional(),
+      }),
+    )
+    .query(({ ctx, input }) => {
+      return ctx.prisma.beef.findMany({
+        take: input.take,
+        skip: input.cursor ? 1 : undefined,
+        cursor: input.cursor
+          ? {
+              id: input.cursor,
+            }
+          : undefined,
+        where: {
+          myString: input.myStringContains ? { contains: input.myStringContains } : undefined,
+          myOptionalString: input.myOptionalStringContains ? { contains: input.myOptionalStringContains } : undefined,
+        },
+        orderBy: input.createdAtOrderBy ? { createdAt: input.createdAtOrderBy } : undefined,
+      });
+    }),
 });
