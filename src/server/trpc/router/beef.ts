@@ -82,7 +82,7 @@ export const beefRouter = router({
   paginatedFindMany: publicProcedure
     .input(
       z.object({
-        cursor: z.string().optional(), //the last id of previous result
+        cursor: z.string().optional(),
         take: z.number().default(10),
         myStringContains: z.string().optional(),
         myOptionalStringContains: z.string().nullish(),
@@ -104,5 +104,41 @@ export const beefRouter = router({
         },
         orderBy: input.createdAtOrderBy ? { createdAt: input.createdAtOrderBy } : undefined,
       });
+    }),
+
+  infiniteBeefs: publicProcedure
+    .input(
+      z.object({
+        cursor: z.string().nullish(),
+        limit: z.number().min(1).max(100).optional(),
+        orderBy: z.string().optional(),
+        order: z.union([z.literal("desc"), z.literal("asc")]).optional(),
+        containsBy: z.string().optional(),
+        contains: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const limit = input.limit ?? 50;
+
+      const cursor = input.cursor ? { id: input.cursor } : undefined;
+      const orderBy = input.orderBy && input.order ? { [input.orderBy]: input.order } : undefined;
+      const where =
+        input.containsBy && input.contains ? { [input.containsBy]: { contains: input.contains } } : undefined;
+      console.log("where:", where);
+      const items = await ctx.prisma.beef.findMany({
+        cursor: cursor,
+        take: limit + 1, //get an extra item at the end which we'll use as next cursor
+        where: where,
+        orderBy: orderBy,
+      });
+      let nextCursor: string | undefined = undefined;
+      if (items.length > limit) {
+        const nextItem = items.pop();
+        nextCursor = nextItem?.id;
+      }
+      return {
+        items,
+        nextCursor,
+      };
     }),
 });

@@ -1,132 +1,129 @@
+import { Beef } from "@prisma/client";
 import type { NextPage } from "next";
 import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { useEffect, useRef, useState } from "react";
+import { CellFloat, CellInt, CellText } from "../components/Cell";
+import { Create } from "../components/Create";
+import { Delete } from "../components/Delete";
+import { useIntersectionObserver } from "../hooks/useIntersectionObserver";
 import { dateformat } from "../utils/date";
-import { AppRouterTypes, trpc } from "../utils/trpc";
+import { trpc } from "../utils/trpc";
 
-type Beef = NonNullable<AppRouterTypes["beef"]["read"]["output"]>;
+//import {AppRouterTypes} from "../utils/trpc";
+//type Beef = NonNullable<AppRouterTypes["beef"]["read"]["output"]>;
 
 const inputStyle =
   "w-[20ch] rounded-sm border border-slate-200 bg-transparent px-2 py-1 hover:border-blue-500 focus:outline-none focus:ring focus:ring-blue-500/40 active:ring active:ring-blue-500/40";
 
+type Order = "asc" | "desc";
+export type BeefProp = Exclude<keyof Beef, "id">;
+
+function stringparam(p: string | string[] | undefined) {
+  return typeof p === "string" ? p : undefined;
+}
+
 /** Changing a key triggers a rerender (modify this to reset defaultValues) */
 let tableKey = 0;
 
-const Home: NextPage = () => {
-  const [myStringContains, setMyStringContains] = useState("");
-  const [createdAtOrderBy, setCreatedAtOrderBy] = useState<"desc" | "asc">("desc");
+/**
+ * remove {someKey:undefined} or {someKey: ""} for a clean query url
+ */
+function cleanQuery(q: { [x: string]: string | string[] | undefined }) {
+  const cleanQ: Record<string, string> = {};
+  Object.entries(q).forEach(([k, v]) => {
+    if (v && typeof v === "string") {
+      cleanQ[k] = v;
+    }
+  });
+  if (!cleanQ["contains"]) {
+    delete cleanQ["containsBy"];
+  }
 
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [take, setTake] = useState(3);
-  const [pageIndex, setPageIndex] = useState(0);
+  return cleanQ;
+}
 
-  const {
-    data: beefs,
-    refetch: refetchBeefs,
-    isLoading: dataIsLoading,
-  } = trpc.beef.paginatedFindMany.useQuery(
-    { myStringContains, cursor, createdAtOrderBy, take },
-    { refetchOnWindowFocus: false },
+const Page: NextPage = () => {
+  const router = useRouter();
+  const updateMultiple = trpc.beef.updateMultiple.useMutation();
+
+  const ref = useRef(null);
+  const entry = useIntersectionObserver(ref, { freezeOnceVisible: false });
+  const loadMoreIsInView = !!entry?.isIntersecting;
+
+  const order = stringparam(router.query.order) as Order | undefined;
+  const orderBy = stringparam(router.query.orderBy) as BeefProp | undefined;
+  const containsBy = (stringparam(router.query.containsBy) || "myString") as BeefProp;
+  const contains = stringparam(router.query.contains);
+
+  const query = trpc.beef.infiniteBeefs.useInfiniteQuery(
+    {
+      limit: 50,
+      orderBy,
+      order,
+      containsBy,
+      contains,
+    },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    },
   );
 
-  const { mutateAsync: createBeef, isLoading: createIsLoading } = trpc.beef.create.useMutation();
-  const { mutateAsync: updateBeefs, isLoading: updateIsLoading } = trpc.beef.updateMultiple.useMutation();
-  const { mutateAsync: deleteBeef, isLoading: deleteIsLoading } = trpc.beef.delete.useMutation();
-
-  const isLoading = dataIsLoading || createIsLoading || updateIsLoading || deleteIsLoading;
-
-  const [myFloat, setMyFloat] = useState(0);
-  const [myInt, setMyInt] = useState(0);
-  const [myString, setMyString] = useState("");
-  const [myOptionalString, setMyOptionalString] = useState("");
-
-  const [editedBeefs, setEditedBeefs] = useState<Beef[]>([]);
-
-  const firstItemCursor = useMemo(() => {
-    if (beefs) {
-      const firstId = beefs?.at(0)?.id;
-      return firstId || undefined;
+  useEffect(() => {
+    if (loadMoreIsInView && query.hasNextPage && query.fetchNextPage) {
+      query.fetchNextPage();
     }
-    return undefined;
-  }, [beefs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadMoreIsInView]);
 
-  const lastItemCursor = useMemo(() => {
-    if (beefs) {
-      const lastId = beefs?.at(-1)?.id;
-      return lastId || undefined;
+  const editQuery = (q: Record<string, string>) => {
+    router.push({
+      query: cleanQuery({ ...router.query, ...q }),
+    });
+  };
+
+  const handleSort = (prop: BeefProp) => () => {
+    const q = { orderBy: prop, order: order === "asc" ? "desc" : "asc" };
+    console.log("handleSort... q:", q);
+    editQuery(q);
+  };
+
+  const [editedItems, setEditedItems] = useState<Beef[]>([]);
+
+  const handleEdit = (partialItem: Partial<Beef>) => {
+    if (!partialItem.id) return;
+
+    const editedItem = editedItems.find((item) => item.id === partialItem.id);
+
+    if (editedItem) {
+      //already edited this some. update it instead of adding it to the list
+      const modifiedItem = { ...editedItem, ...partialItem };
+      setEditedItems((prev) => [...prev.filter((b) => b.id !== modifiedItem.id), modifiedItem]);
+      return;
     }
-    return undefined;
-  }, [beefs]);
 
-  const handleItemsPerPage = (number: number) => {
-    setCursor(undefined);
-    setPageIndex(0);
-    setTake(number);
+    const originalItem = query.data?.pages
+      .map((page) => page.items)
+      .flat()
+      .find((item) => item.id === partialItem.id);
+
+    if (originalItem) {
+      const modifiedItem = { ...originalItem, ...partialItem };
+      setEditedItems((prev) => [...prev, modifiedItem]);
+      return;
+    }
   };
 
-  const handleContains = (str: string) => {
-    setCursor(undefined);
-    setPageIndex(0);
-    setMyStringContains(str);
-  };
-
-  const onNextPage = () => {
-    setCursor(lastItemCursor);
-    setTake((prev) => Math.abs(prev)); //positive
-    setPageIndex((prev) => prev + 1);
-  };
-
-  const onPrevPage = () => {
-    setCursor(firstItemCursor);
-    setTake((prev) => -Math.abs(prev)); //negative
-    setPageIndex((prev) => prev - 1);
-  };
-
-  const handleCreate = async () => {
-    await createBeef({ myFloat, myInt, myString, myOptionalString });
-    await refetchBeefs();
-    setEditedBeefs([]);
-    //tableKey += 1;
-  };
-
-  const handleDelete = async (id: string) => {
-    await deleteBeef({ id });
-    await refetchBeefs();
-    setEditedBeefs((prev) => prev.filter((b) => b.id !== id));
-    //tableKey += 1;
-  };
-
-  const handleSaveChanges = async () => {
-    await updateBeefs(editedBeefs);
-    await refetchBeefs();
-    setEditedBeefs([]);
+  const handleSave = async () => {
+    await updateMultiple.mutateAsync(editedItems);
+    await query.refetch();
+    setEditedItems([]);
     tableKey += 1;
   };
 
-  const handleDiscardChanges = async () => {
-    await refetchBeefs();
-    setEditedBeefs([]);
+  const handleDiscard = () => {
+    setEditedItems([]);
     tableKey += 1;
-  };
-
-  const handleEdit = (partialBeef: Partial<Beef>) => {
-    if (!beefs || !partialBeef.id) return;
-    const id = partialBeef.id;
-
-    const dbBeef = beefs.find((beef) => beef.id === id);
-    if (!dbBeef) return;
-
-    const editedBeef = editedBeefs.find((beef) => beef.id === id);
-    if (editedBeef) {
-      //has already edited this a bit, update it instead of adding a new editedBeef
-      const updatedBeef = { ...editedBeef, ...partialBeef };
-      const updatedBeefs = [...editedBeefs.filter((b) => b.id !== id), updatedBeef];
-      setEditedBeefs(updatedBeefs);
-    } else {
-      //start editing a new, add new editedBeef
-      const updatedBeef = { ...dbBeef, ...partialBeef };
-      setEditedBeefs((prev) => [...prev, updatedBeef]);
-    }
   };
 
   return (
@@ -138,249 +135,125 @@ const Home: NextPage = () => {
         <div>
           <h1 className="my-8 text-center text-4xl">crudbeef example</h1>
 
-          <div>
-            <label htmlFor="createdAtOrderBy">order by oldest first</label>
-            <input
-              id="createdAtOrderBy"
-              type="checkbox"
-              defaultValue="checked"
-              onChange={() => setCreatedAtOrderBy((prev) => (prev === "asc" ? "desc" : "asc"))}
-              className={inputStyle}
-            />
-          </div>
-          <div>
-            <label htmlFor="take">items per page</label>
-            <input
-              id="take"
-              type="number"
-              value={take}
-              onChange={(e) => {
-                const number = parseFloat(e.target.value);
-                if (isFinite(number)) handleItemsPerPage(number);
-              }}
-              className={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="myStringContains">myString contains</label>
-            <input
-              id="myStringContains"
-              type="text"
-              value={myStringContains}
-              onChange={(e) => handleContains(e.target.value)}
-              className={inputStyle}
-            />
-          </div>
-
+          <Create onCreated={() => query.refetch()} />
           <button
-            disabled={isLoading || editedBeefs.length === 0}
-            onClick={handleSaveChanges}
-            className={`px-2 py-1 ${editedBeefs.length > 0 ? "bg-green-600" : ""} disabled:bg-neutral-400`}
+            disabled={editedItems.length < 1}
+            onClick={handleSave}
+            className={`px-2 py-1 ${editedItems.length > 0 ? "bg-green-600" : ""} disabled:bg-neutral-400`}
           >
             save changes
           </button>
 
           <button
-            disabled={isLoading || editedBeefs.length === 0}
-            onClick={handleDiscardChanges}
-            className={`px-2 py-1 ${editedBeefs.length > 0 ? "bg-blue-600" : ""} disabled:bg-neutral-400`}
+            disabled={editedItems.length < 1}
+            onClick={handleDiscard}
+            className={`px-2 py-1 ${editedItems.length > 0 ? "bg-blue-600" : ""} disabled:bg-neutral-400`}
           >
             discard changes
           </button>
 
+          <div>Options</div>
+          <label htmlFor="containsBy">Filter</label>
+          <select
+            name="property"
+            id="containsBy"
+            value={containsBy}
+            onChange={(e) => editQuery({ containsBy: e.target.value })}
+          >
+            <option value="myString">myString</option>
+            <option value="myOptionalString">myOptionalString</option>
+          </select>
+
+          <label htmlFor="contains">contains</label>
+          <input
+            id="contains"
+            className={inputStyle}
+            type="text"
+            value={contains || ""}
+            onChange={(e) => editQuery({ containsBy: containsBy || "myString", contains: e.target.value })}
+          />
+
           <table className="" key={tableKey}>
             <tbody>
               <tr>
-                <th>createdAt</th>
-                <th>myFloat</th>
-                <th>myInt</th>
-                <th>myString</th>
-                <th>myOptionalString</th>
+                <th>
+                  <button onClick={handleSort("createdAt")}>createdAt</button>
+                </th>
+
+                <th>
+                  <button onClick={handleSort("myFloat")}>myFloat</button>
+                </th>
+                <th>
+                  <button onClick={handleSort("myInt")}>myInt</button>
+                </th>
+                <th>
+                  <button onClick={handleSort("myString")}>myString</button>
+                </th>
+                <th>
+                  <button onClick={handleSort("myOptionalString")}>myOptionalString</button>
+                </th>
               </tr>
-              <tr>
-                <td> </td>
-                <td>
-                  <input
-                    type="number"
-                    value={myFloat}
-                    onChange={(e) => {
-                      const number = parseFloat(e.target.value);
-                      if (isFinite(number)) setMyFloat(number);
-                    }}
-                    className={inputStyle}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={myInt}
-                    onChange={(e) => {
-                      const number = parseFloat(e.target.value);
-                      if (isFinite(number)) setMyInt(Math.floor(number));
-                    }}
-                    className={inputStyle}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={myString}
-                    onChange={(e) => {
-                      setMyString(e.target.value);
-                    }}
-                    className={inputStyle}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={myOptionalString}
-                    onChange={(e) => {
-                      setMyOptionalString(e.target.value);
-                    }}
-                    className={inputStyle}
-                  />
-                </td>
-                <td>
-                  <button
-                    disabled={isLoading}
-                    onClick={handleCreate}
-                    className="bg-blue-600 px-2 py-1 font-semibold text-white disabled:bg-gray-500"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="h-6 w-6"
+
+              {query.data?.pages
+                .map((page) => page.items)
+                .flat()
+                .map((item) => {
+                  const hasEdited = editedItems.some((x) => x.id === item.id);
+                  const editedItem = editedItems.find((x) => x.id === item.id);
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`${
+                        hasEdited ? "bg-orange-200 even:bg-orange-200" : "bg-neutral-100 even:bg-neutral-200"
+                      }`}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
+                      <td>{dateformat(item.createdAt)}</td>
 
-              {beefs?.map((beef) => {
-                const hasEdited = editedBeefs.some((b) => b.id === beef.id);
-                return (
-                  <tr
-                    key={beef.id}
-                    className={`${
-                      hasEdited ? "bg-orange-200 even:bg-orange-200" : "bg-neutral-100 even:bg-neutral-200"
-                    }`}
-                  >
-                    <td>{dateformat(beef.createdAt)}</td>
-                    <td>
-                      <input
-                        type="number"
-                        className={inputStyle}
-                        defaultValue={beef.myFloat}
-                        onChange={(e) => {
-                          const number = parseFloat(e.target.value);
-                          if (isFinite(number)) {
-                            handleEdit({ id: beef.id, myFloat: number });
-                          }
-                        }}
+                      <CellFloat
+                        defaultValue={editedItem?.myFloat ?? item.myFloat}
+                        onChange={(x) => handleEdit({ id: item.id, myFloat: x })}
                       />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className={inputStyle}
-                        defaultValue={beef.myInt}
-                        onChange={(e) => {
-                          const number = Math.floor(parseFloat(e.target.value));
-
-                          if (isFinite(number)) {
-                            console.log("triggered handleEdit with myInt:", number);
-                            handleEdit({ id: beef.id, myInt: number });
-                          }
-                        }}
+                      <CellInt
+                        defaultValue={editedItem?.myInt ?? item.myInt}
+                        onChange={(x) => handleEdit({ id: item.id, myInt: x })}
                       />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className={inputStyle}
-                        defaultValue={beef.myString}
-                        onChange={(e) => handleEdit({ id: beef.id, myString: e.target.value })}
+                      <CellText
+                        defaultValue={editedItem?.myString ?? item.myString}
+                        onChange={(x) => handleEdit({ id: item.id, myString: x })}
                       />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className={inputStyle}
-                        defaultValue={beef.myOptionalString || undefined}
-                        onChange={(e) => handleEdit({ id: beef.id, myOptionalString: e.target.value })}
+                      <CellText
+                        defaultValue={editedItem?.myOptionalString ?? (item.myOptionalString || "")}
+                        onChange={(x) => handleEdit({ id: item.id, myOptionalString: x })}
                       />
-                    </td>
-                    <td>
-                      <button
-                        disabled={isLoading}
-                        className="bg-red-600 px-2 py-1 font-semibold text-white disabled:bg-gray-500"
-                        onClick={() => handleDelete(beef.id)}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="h-6 w-6"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <td className="w-auto">
+                        <Delete
+                          id={item.id}
+                          onDeleted={async (item) => {
+                            setEditedItems((prev) => prev.filter((x) => x.id !== item.id));
+                            await query.refetch();
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
-          <div className="flex items-center gap-4">
-            <button
-              disabled={pageIndex < 1}
-              onClick={onPrevPage}
-              className="flex bg-blue-600 px-2 py-1 disabled:bg-neutral-400"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="h-6 w-6"
+          <div className="flex justify-center">
+            <div>
+              <button
+                ref={ref}
+                onClick={() => query.fetchNextPage()}
+                disabled={!query.hasNextPage || query.isFetchingNextPage}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953l7.108-4.062A1.125 1.125 0 0121 8.688v8.123zM11.25 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953L9.567 7.71a1.125 1.125 0 011.683.977v8.123z"
-                />
-              </svg>
-            </button>
-            <div>page {pageIndex + 1}</div>
-            <button
-              disabled={!beefs || beefs.length < take}
-              onClick={onNextPage}
-              className="flex bg-blue-600 px-2 py-1 disabled:bg-neutral-400"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="h-6 w-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062A1.125 1.125 0 013 16.81V8.688zM12.75 8.688c0-.864.933-1.405 1.683-.977l7.108 4.062a1.125 1.125 0 010 1.953l-7.108 4.062a1.125 1.125 0 01-1.683-.977V8.688z"
-                />
-              </svg>
-            </button>
+                {query.isFetchingNextPage
+                  ? "Loading more..."
+                  : query.hasNextPage
+                  ? "Load More"
+                  : "Nothing more to load"}
+              </button>
+            </div>
+            <div>{query.isFetching && !query.isFetchingNextPage ? "looking for changes..." : null}</div>
           </div>
         </div>
       </div>
@@ -388,4 +261,4 @@ const Home: NextPage = () => {
   );
 };
 
-export default Home;
+export default Page;
