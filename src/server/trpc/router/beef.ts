@@ -124,7 +124,7 @@ export const beefRouter = router({
       const orderBy = input.orderBy && input.order ? { [input.orderBy]: input.order } : undefined;
       const where =
         input.containsBy && input.contains ? { [input.containsBy]: { contains: input.contains } } : undefined;
-      console.log("where:", where);
+
       const items = await ctx.prisma.beef.findMany({
         cursor: cursor,
         take: limit + 1, //get an extra item at the end which we'll use as next cursor

@@ -1,25 +1,21 @@
+import { Beef } from "@prisma/client";
 import { useState } from "react";
 import { trpc } from "../utils/trpc";
 import { InputFloat, InputInt, InputText } from "./Input";
 
 type Props = {
-  onCreated: () => void;
+  onCreated: (item: Beef) => void;
 };
 
 export function Create({ onCreated }: Props) {
-  const { mutateAsync, isLoading, error } = trpc.beef.create.useMutation();
+  const { mutate, isLoading, error } = trpc.beef.create.useMutation({ onSuccess: (data) => onCreated(data) });
 
   const [myFloat, setMyFloat] = useState(0);
   const [myInt, setMyInt] = useState(0);
   const [myString, setMyString] = useState("");
   const [myOptionalString, setMyOptionalString] = useState("");
 
-  const handleSubmit = async () => {
-    try {
-      await mutateAsync({ myFloat, myInt, myString, myOptionalString });
-      onCreated();
-    } catch (error) {}
-  };
+  const handleSubmit = () => mutate({ myFloat, myInt, myString, myOptionalString });
 
   return (
     <table>

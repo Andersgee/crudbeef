@@ -4,6 +4,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import { CellFloat, CellInt, CellText } from "../components/Cell";
+import { Chevron } from "../components/Chevron";
 import { Create } from "../components/Create";
 import { Delete } from "../components/Delete";
 import { useIntersectionObserver } from "../hooks/useIntersectionObserver";
@@ -84,7 +85,6 @@ const Page: NextPage = () => {
 
   const handleSort = (prop: BeefProp) => () => {
     const q = { orderBy: prop, order: order === "asc" ? "desc" : "asc" };
-    console.log("handleSort... q:", q);
     editQuery(q);
   };
 
@@ -177,20 +177,30 @@ const Page: NextPage = () => {
             <tbody>
               <tr>
                 <th>
-                  <button onClick={handleSort("createdAt")}>createdAt</button>
+                  <button onClick={handleSort("createdAt")} className="inline-flex">
+                    createdAt <Chevron dir={orderBy !== "createdAt" ? undefined : order} />
+                  </button>
                 </th>
 
                 <th>
-                  <button onClick={handleSort("myFloat")}>myFloat</button>
+                  <button onClick={handleSort("myFloat")} className="inline-flex">
+                    myFloat <Chevron dir={orderBy !== "myFloat" ? undefined : order} />
+                  </button>
                 </th>
                 <th>
-                  <button onClick={handleSort("myInt")}>myInt</button>
+                  <button onClick={handleSort("myInt")} className="inline-flex">
+                    myInt <Chevron dir={orderBy !== "myInt" ? undefined : order} />
+                  </button>
                 </th>
                 <th>
-                  <button onClick={handleSort("myString")}>myString</button>
+                  <button onClick={handleSort("myString")} className="inline-flex">
+                    myString <Chevron dir={orderBy !== "myString" ? undefined : order} />
+                  </button>
                 </th>
                 <th>
-                  <button onClick={handleSort("myOptionalString")}>myOptionalString</button>
+                  <button onClick={handleSort("myOptionalString")} className="inline-flex">
+                    myOptionalString <Chevron dir={orderBy !== "myOptionalString" ? undefined : order} />
+                  </button>
                 </th>
               </tr>
 
