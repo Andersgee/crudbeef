@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import useOnClickOutside from "../hooks/useOnClickOutside";
 
 type CellTextProps = {
   defaultValue: string;
@@ -7,11 +8,19 @@ type CellTextProps = {
 
 export function CellText({ defaultValue, onChange }: CellTextProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const ref = useRef(null);
+
+  useOnClickOutside(ref, () => {
+    if (isEditing) {
+      setIsEditing(false);
+    }
+  });
 
   if (isEditing) {
     return (
       <td>
         <input
+          ref={ref}
           type="text"
           defaultValue={defaultValue}
           onChange={(e) => onChange(e.target.value)}
@@ -30,11 +39,19 @@ type CellFloatProps = {
 
 export function CellFloat({ defaultValue, onChange }: CellFloatProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const ref = useRef(null);
+
+  useOnClickOutside(ref, () => {
+    if (isEditing) {
+      setIsEditing(false);
+    }
+  });
 
   if (isEditing) {
     return (
       <td>
         <input
+          ref={ref}
           type="number"
           defaultValue={defaultValue}
           onChange={(e) => {
@@ -59,11 +76,19 @@ type CellIntProps = {
 
 export function CellInt({ defaultValue, onChange }: CellIntProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const ref = useRef(null);
+
+  useOnClickOutside(ref, () => {
+    if (isEditing) {
+      setIsEditing(false);
+    }
+  });
 
   if (isEditing) {
     return (
       <td>
         <input
+          ref={ref}
           type="number"
           defaultValue={defaultValue}
           onChange={(e) => {

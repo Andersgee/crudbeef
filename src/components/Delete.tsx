@@ -3,18 +3,13 @@ import { trpc } from "../utils/trpc";
 
 type Props = {
   id: string;
-  onDeleted: (res: Beef) => void;
+  onDeleted: (item: Beef) => void;
 };
 
 export function Delete({ id, onDeleted }: Props) {
-  const { mutateAsync, isLoading, error } = trpc.beef.delete.useMutation();
+  const { mutate, isLoading, error } = trpc.beef.delete.useMutation({ onSuccess: (data) => onDeleted(data) });
 
-  const handleSubmit = async () => {
-    try {
-      const res = await mutateAsync({ id });
-      onDeleted(res);
-    } catch (error) {}
-  };
+  const handleSubmit = () => mutate({ id });
 
   return (
     <>

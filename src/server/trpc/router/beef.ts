@@ -1,5 +1,6 @@
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 export const beefRouter = router({
   create: publicProcedure
@@ -79,33 +80,6 @@ export const beefRouter = router({
   readAll: publicProcedure.query(({ ctx }) => {
     return ctx.prisma.beef.findMany({ orderBy: { createdAt: "desc" } });
   }),
-  paginatedFindMany: publicProcedure
-    .input(
-      z.object({
-        cursor: z.string().optional(),
-        take: z.number().default(10),
-        myStringContains: z.string().optional(),
-        myOptionalStringContains: z.string().nullish(),
-        createdAtOrderBy: z.union([z.literal("desc"), z.literal("asc")]).optional(),
-      }),
-    )
-    .query(({ ctx, input }) => {
-      return ctx.prisma.beef.findMany({
-        take: input.take,
-        skip: input.cursor ? 1 : undefined,
-        cursor: input.cursor
-          ? {
-              id: input.cursor,
-            }
-          : undefined,
-        where: {
-          myString: input.myStringContains ? { contains: input.myStringContains } : undefined,
-          myOptionalString: input.myOptionalStringContains ? { contains: input.myOptionalStringContains } : undefined,
-        },
-        orderBy: input.createdAtOrderBy ? { createdAt: input.createdAtOrderBy } : undefined,
-      });
-    }),
-
   infiniteBeefs: publicProcedure
     .input(
       z.object({
@@ -113,17 +87,14 @@ export const beefRouter = router({
         limit: z.number().min(1).max(100).optional(),
         orderBy: z.string().optional(),
         order: z.union([z.literal("desc"), z.literal("asc")]).optional(),
-        containsBy: z.string().optional(),
-        contains: z.string().optional(),
+        where: z.any(), //is there a way to do z.inferSchemaFrom(MyCustomType) ?
       }),
     )
     .query(async ({ ctx, input }) => {
       const limit = input.limit ?? 50;
-
       const cursor = input.cursor ? { id: input.cursor } : undefined;
       const orderBy = input.orderBy && input.order ? { [input.orderBy]: input.order } : undefined;
-      const where =
-        input.containsBy && input.contains ? { [input.containsBy]: { contains: input.contains } } : undefined;
+      const where = input?.where || undefined;
 
       const items = await ctx.prisma.beef.findMany({
         cursor: cursor,
@@ -131,6 +102,7 @@ export const beefRouter = router({
         where: where,
         orderBy: orderBy,
       });
+
       let nextCursor: string | undefined = undefined;
       if (items.length > limit) {
         const nextItem = items.pop();

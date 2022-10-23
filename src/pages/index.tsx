@@ -7,15 +7,10 @@ import { CellFloat, CellInt, CellText } from "../components/Cell";
 import { Chevron } from "../components/Chevron";
 import { Create } from "../components/Create";
 import { Delete } from "../components/Delete";
+import { BeefWhere, Filter } from "../components/Filter";
 import { useIntersectionObserver } from "../hooks/useIntersectionObserver";
 import { dateformat } from "../utils/date";
 import { trpc } from "../utils/trpc";
-
-//import {AppRouterTypes} from "../utils/trpc";
-//type Beef = NonNullable<AppRouterTypes["beef"]["read"]["output"]>;
-
-const inputStyle =
-  "w-[20ch] rounded-sm border border-slate-200 bg-transparent px-2 py-1 hover:border-blue-500 focus:outline-none focus:ring focus:ring-blue-500/40 active:ring active:ring-blue-500/40";
 
 type Order = "asc" | "desc";
 export type BeefProp = Exclude<keyof Beef, "id">;
@@ -52,18 +47,16 @@ const Page: NextPage = () => {
   const entry = useIntersectionObserver(ref, { freezeOnceVisible: false });
   const loadMoreIsInView = !!entry?.isIntersecting;
 
-  const order = stringparam(router.query.order) as Order | undefined;
-  const orderBy = stringparam(router.query.orderBy) as BeefProp | undefined;
-  const containsBy = (stringparam(router.query.containsBy) || "myString") as BeefProp;
-  const contains = stringparam(router.query.contains);
+  const [where, setWhere] = useState<BeefWhere>({});
+  const order = (stringparam(router.query.order) as Order) || "desc";
+  const orderBy = (stringparam(router.query.orderBy) as BeefProp) || "createdAt";
 
   const query = trpc.beef.infiniteBeefs.useInfiniteQuery(
     {
       limit: 50,
       orderBy,
       order,
-      containsBy,
-      contains,
+      where,
     },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -134,45 +127,28 @@ const Page: NextPage = () => {
       <div className="flex justify-center">
         <div>
           <h1 className="my-8 text-center text-4xl">crudbeef example</h1>
+          <div>
+            <button
+              disabled={editedItems.length < 1}
+              onClick={handleSave}
+              className={`px-2 py-1 ${editedItems.length > 0 ? "bg-green-600" : ""} disabled:bg-neutral-400`}
+            >
+              save changes
+            </button>
+            <button
+              disabled={editedItems.length < 1}
+              onClick={handleDiscard}
+              className={`px-2 py-1 ${editedItems.length > 0 ? "bg-blue-600" : ""} disabled:bg-neutral-400`}
+            >
+              discard changes
+            </button>
+            {editedItems.length > 0 && <span>({editedItems.length} changed items)</span>}
+          </div>
 
-          <Create onCreated={() => query.refetch()} />
-          <button
-            disabled={editedItems.length < 1}
-            onClick={handleSave}
-            className={`px-2 py-1 ${editedItems.length > 0 ? "bg-green-600" : ""} disabled:bg-neutral-400`}
-          >
-            save changes
-          </button>
+          <h2 className="mt-4">Filter</h2>
+          <Filter onChange={(w) => setWhere(w)} />
 
-          <button
-            disabled={editedItems.length < 1}
-            onClick={handleDiscard}
-            className={`px-2 py-1 ${editedItems.length > 0 ? "bg-blue-600" : ""} disabled:bg-neutral-400`}
-          >
-            discard changes
-          </button>
-
-          <div>Options</div>
-          <label htmlFor="containsBy">Filter</label>
-          <select
-            name="property"
-            id="containsBy"
-            value={containsBy}
-            onChange={(e) => editQuery({ containsBy: e.target.value })}
-          >
-            <option value="myString">myString</option>
-            <option value="myOptionalString">myOptionalString</option>
-          </select>
-
-          <label htmlFor="contains">contains</label>
-          <input
-            id="contains"
-            className={inputStyle}
-            type="text"
-            value={contains || ""}
-            onChange={(e) => editQuery({ containsBy: containsBy || "myString", contains: e.target.value })}
-          />
-
+          <h2 className="mt-4">Editable Table</h2>
           <table className="" key={tableKey}>
             <tbody>
               <tr>
@@ -203,6 +179,7 @@ const Page: NextPage = () => {
                   </button>
                 </th>
               </tr>
+              <Create onCreated={() => query.refetch()} />
 
               {query.data?.pages
                 .map((page) => page.items)
